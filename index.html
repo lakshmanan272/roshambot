@@ -51,6 +51,7 @@ button{font:inherit;color:inherit}
 .icon-btn svg{width:20px;height:20px}
 #soundBtn[aria-pressed="false"] .wave,#soundBtn[aria-pressed="true"] .mute{display:none}
 #soundBtn[aria-pressed="false"]{color:var(--muted)}
+#fsBtn[aria-pressed="true"] .enter,#fsBtn[aria-pressed="false"] .exit{display:none}
 .icon-btn:focus-visible,.btn:focus-visible,.text-btn:focus-visible,.throw:focus-visible{outline:2px solid var(--ember);outline-offset:2px}
 
 /* layout */
@@ -246,6 +247,9 @@ button{font:inherit;color:inherit}
       <button class="icon-btn" id="soundBtn" type="button" aria-label="Sound" aria-pressed="true" title="Sound (M)">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z" fill="currentColor"/><path class="wave" d="M15.5 9a4.2 4.2 0 0 1 0 6M18 6.5a7.8 7.8 0 0 1 0 11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path class="mute" d="M16 9.5l5 5M21 9.5l-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
       </button>
+      <button class="icon-btn" id="fsBtn" type="button" aria-label="Full screen" aria-pressed="false" title="Full screen (F)">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path class="enter" d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/><path class="exit" d="M9 4v5H4M15 4v5h5M20 15h-5v5M4 15h5v5"/></svg>
+      </button>
       <button class="icon-btn" id="setBtn" type="button" aria-label="Settings" title="Settings">
         <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h9M17.4 7H20M4 17h2.6M11.4 17H20"/><circle cx="15.2" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/></svg>
       </button>
@@ -296,7 +300,7 @@ button{font:inherit;color:inherit}
         <button class="throw" type="button" data-move="1" id="t1" aria-label="Throw paper (key 2)"><kbd>2</kbd><img alt="" id="i1" width="58" height="58"><span class="name">Paper</span></button>
         <button class="throw" type="button" data-move="2" id="t2" aria-label="Throw scissors (key 3)"><kbd>3</kbd><img alt="" id="i2" width="58" height="58"><span class="name">Scissors</span></button>
       </div>
-      <p class="hint" id="hint">Keys 1 · 2 · 3 or R · P · S &nbsp;·&nbsp; M mutes</p>
+      <p class="hint" id="hint">Keys 1 · 2 · 3 or R · P · S &nbsp;·&nbsp; M mutes &nbsp;·&nbsp; F full screen</p>
       <p class="sr-only" id="live" aria-live="polite"></p>
     </section>
 
@@ -1500,6 +1504,24 @@ function openSheet() {
   setTimeout(() => { const el = document.querySelector('#sheetWrap input:checked'); if (el) el.focus(); }, 40);
 }
 function closeSheet() { sheetOpen = false; $('sheetWrap').hidden = true; try { lastFocus && lastFocus.focus({ preventScroll: true }); } catch (e) {} }
+/* ---------- full screen ---------- */
+const fsBtn = $('fsBtn');
+const fsSupported = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
+const isFs = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+function toggleFs() {
+  try {
+    if (isFs()) { (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
+    const el = document.documentElement;
+    const r = (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+    if (r && r.catch) r.catch(() => toast('Full screen not available'));
+  } catch (e) { toast('Full screen not available'); }
+}
+function syncFs() { const on = isFs(); fsBtn.setAttribute('aria-pressed', on ? 'true' : 'false'); fsBtn.setAttribute('aria-label', on ? 'Exit full screen' : 'Full screen'); fsBtn.title = on ? 'Exit full screen (F)' : 'Full screen (F)'; }
+if (!fsSupported) fsBtn.hidden = true;
+fsBtn.addEventListener('click', toggleFs);
+document.addEventListener('fullscreenchange', syncFs);
+document.addEventListener('webkitfullscreenchange', syncFs);
+
 function setSound(on) { settings.sound = on; Sound.set(on); $('soundBtn').setAttribute('aria-pressed', on ? 'true' : 'false'); $('soundBtn').setAttribute('aria-label', on ? 'Sound on' : 'Sound off'); }
 
 /* ---------- input ---------- */
@@ -1509,6 +1531,7 @@ window.addEventListener('keydown', e => {
   const k = (e.key || '').toLowerCase();
   if (sheetOpen) { if (k === 'escape') closeSheet(); return; }
   if (k in KEYS) { e.preventDefault(); if (!e.repeat) throwMove(KEYS[k]); return; }
+  if (k === 'f' && fsSupported) { e.preventDefault(); toggleFs(); return; }
   if (k === 'm') { setSound(!settings.sound); toast(settings.sound ? 'Sound on' : 'Sound off'); saveStore(); return; }
   if ((k === 'enter' || k === ' ') && state === 'matchover' && document.activeElement === document.body) { e.preventDefault(); newMatch(); }
 });
@@ -1578,7 +1601,7 @@ function start(data) {
   buildYouLook(settings.skin);
   makeYouIcons(); makeBotIcons();
   $('idleKeys').textContent = COARSE ? 'Tap a hand below' : 'Press 1 · 2 · 3';
-  $('hint').textContent = COARSE ? 'Tap a hand to throw' : 'Keys 1 · 2 · 3 or R · P · S · M mutes';
+  $('hint').textContent = COARSE ? 'Tap a hand to throw' : 'Keys 1 · 2 · 3 or R · P · S · M mutes · F full screen';
   if (model.h.length) say(`Welcome back. I remember ${model.h.length} of your throws.`); else say("Pick a hand. I'm already watching.");
   resize();
   try { new ResizeObserver(() => resize()).observe(arena); } catch (e) { window.addEventListener('resize', resize); }
